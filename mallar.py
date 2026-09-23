@@ -2,7 +2,7 @@
 
 MALLAR = [
     {
-        "ikon": "⚽", "titel": "Fotboll",
+        "titel": "Fotboll", "etikett": "Sport", "farg": "#16A36A", "punkt": "green",
         "text": "Svensk och internationell fotboll från sportsajter.",
         "bevakning": {
             "namn": "Fotbollsnyheter",
@@ -35,7 +35,7 @@ MALLAR = [
         },
     },
     {
-        "ikon": "🤖", "titel": "AI",
+        "titel": "AI", "etikett": "Teknik", "farg": "#6D4AFF", "punkt": "violet",
         "text": "AI-modeller, bolagen bakom dem och regleringen runt omkring.",
         "bevakning": {
             "namn": "AI-bevakning",
@@ -59,7 +59,7 @@ MALLAR = [
         },
     },
     {
-        "ikon": "📈", "titel": "Ekonomi",
+        "titel": "Ekonomi", "etikett": "Finans", "farg": "#E8871E", "punkt": "orange",
         "text": "Räntor, inflation, börsen och konjunkturen i Sverige och världen.",
         "bevakning": {
             "namn": "Ekonomibevakning",
