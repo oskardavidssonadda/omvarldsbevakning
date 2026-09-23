@@ -7,7 +7,7 @@ from html import escape as esc
 
 import streamlit as st
 
-from bevakning import (antal, hamta_nyheter, las_kallor_fran_text, markera, normalisera, rensa_ord,
+from bevakning import (TIDSZON, antal, hamta_nyheter, las_kallor_fran_text, markera, normalisera, rensa_ord,
                        skapa_excel, skapa_word, tom_bevakning, vard)
 from mallar import GRUPPER, MALLAR
 
@@ -301,7 +301,7 @@ def bevakningssida(pid):
         else:
             with plats, st.spinner(f"Hämtar {antal(len(b['kallor']), 'källa', 'källor')}…"):
                 e["resultat"] = hamta_nyheter(b)
-            e["kortid"] = datetime.now().strftime("%H:%M")
+            e["kortid"] = datetime.now(TIDSZON).strftime("%H:%M")
             byt_flik(pid, FLIKAR[2])
             st.rerun()
 

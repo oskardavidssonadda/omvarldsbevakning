@@ -3,7 +3,7 @@ import calendar
 import html
 import re
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from io import BytesIO
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -260,7 +260,7 @@ def _lank(paragraph, text, *, ankare=None, url=None):
 
 def skapa_word(df, statistik, rubrik):
     doc = Document()
-    doc.add_heading(f"{rubrik}: {date.today():%Y-%m-%d}", level=1)
+    doc.add_heading(f"{rubrik}: {datetime.now(TIDSZON):%Y-%m-%d}", level=1)
     kallor = [k for k in statistik.itertuples() if k.Träffar > 0]
     doc.add_paragraph(f"Totalt {antal(len(df), 'artikel', 'artiklar')} från {antal(len(kallor), 'källa', 'källor')}.")
 
