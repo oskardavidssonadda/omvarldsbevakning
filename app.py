@@ -7,16 +7,27 @@ from html import escape as esc
 
 import streamlit as st
 
-from bevakning import (antal, hamta_nyheter, markera, normalisera, rensa_ord,
+from bevakning import (antal, hamta_nyheter, las_kallor_fran_text, markera, normalisera, rensa_ord,
                        skapa_excel, skapa_word, tom_bevakning, vard)
 from mallar import GRUPPER, MALLAR
 
-st.set_page_config(page_title="Omvärldsbevakning", page_icon="📰", layout="wide",
+st.set_page_config(page_title="Adda Omvärldsbevakning", page_icon="📰", layout="wide",
                    initial_sidebar_state="expanded")
 
 EGEN = {"farg": "#0E9AA7", "etikett": "Egen", "punkt": "blue"}
 FRAN_FIL = {"farg": "#64748B", "etikett": "Från fil", "punkt": "gray"}
 FLIKAR = ["1. Källor", "2. Nyckelord", "3. Resultat"]
+
+PROMPT_KALLOR = """Jag jobbar på Adda och vill omvärldsbevaka [ämne, t.ex. upphandling av IT-tjänster i kommuner].
+Ta fram 10 RSS-flöden från svenska och internationella källor som skriver om det här.
+Svara med en källa per rad i exakt det här formatet, utan annan text:
+Namn | https://länk-till-rss-flödet
+Ta bara med länkar som du är säker på finns."""
+
+PROMPT_ORD = """Jag jobbar på Adda och vill omvärldsbevaka [ämne, t.ex. upphandling av IT-tjänster i kommuner].
+Ge mig 30 nyckelord på svenska och engelska som fångar artiklar om det här.
+Sätt en stjärna i slutet av ord som böjs, till exempel ränt* för räntan, räntor och räntehöjning.
+Svara bara med orden på en enda rad, separerade med kommatecken."""
 
 
 def slug(text):
@@ -97,6 +108,8 @@ mark {background: #FFE58F; color: #1D1B3A; padding: 0 .15em; border-radius: 3px;
 .logo {display: flex; align-items: center; gap: .55rem; font-family: "Bricolage Grotesque", sans-serif;
   font-weight: 800; font-size: 1.25rem; margin: .2rem 0 1.2rem;}
 .logo span {width: 14px; height: 14px; border-radius: 4px; background: linear-gradient(135deg, #8F7BFF, #FF7A59);}
+.logo small {display: block; font-family: Figtree, sans-serif; font-weight: 500; font-size: .85rem; opacity: .7; margin-top: .1rem;}
+.logo div {line-height: 1.1;}
 [data-testid="stSidebar"] .stButton button {justify-content: flex-start;}
 @media (prefers-reduced-motion: reduce) {[class*="st-key-kort_"], .artikel {transition: none;}
   [class*="st-key-kort_"]:hover {transform: none;}}
@@ -189,7 +202,7 @@ def kort(nyckel, farg, etikett, titel, text, meta):
 # =================== Startsida ===================
 def startsida():
     st.markdown(
-        "<div class='hero'><div class='hero-liten'>Omvärldsbevakning</div>"
+        "<div class='hero'><div class='hero-liten'>Adda Omvärldsbevakning</div>"
         "<div class='hero-titel'>Vad vill du hålla koll på?</div>"
         "<div class='hero-text'>Välj en färdig mall och gör den till din egen, eller bygg en bevakning från grunden. "
         "Appen samlar dagens artiklar från dina källor och plockar ut det som matchar dina nyckelord.</div></div>",
@@ -278,7 +291,7 @@ def bevakningssida(pid):
     with t_kallor:
         flik_kallor(pid, e, b, k)
     with t_ord:
-        kor_ord = flik_nyckelord(pid, b, start, k)
+        kor_ord = flik_nyckelord(pid, e, b, start, k)
     with t_res:
         flik_resultat(e, b, namn_fil)
 
@@ -300,6 +313,8 @@ def flik_kallor(pid, e, b, k):
     if e["resultat"] is not None:
         status = {r["Källa"]: r for r in e["resultat"][1].to_dict("records")}
 
+    if f"meddelande_{pid}" in ss:
+        st.success(ss.pop(f"meddelande_{pid}"))
     trasiga = [n for n, r in status.items() if r["Status"] != "OK" and any(x["namn"] == n for x in b["kallor"])]
     if trasiga:
         a, c = st.columns([3, 1.4], vertical_alignment="center")
@@ -338,20 +353,55 @@ def flik_kallor(pid, e, b, k):
             else:
                 b["kallor"].append({"namn": namn.strip() or vard(url), "url": url, "filtrera": filtrera, "_id": nytt_id()})
                 st.rerun()
-    st.caption("Hittar du ingen RSS-länk? Sök på sajtens namn och RSS, eller prova att lägga till /rss eller /feed "
-               "efter adressen, till exempel https://sajt.se/feed.")
+    with st.expander("Klistra in flera källor på en gång"):
+        with st.form(k("flera_kallor"), clear_on_submit=True, border=False):
+            text = st.text_area("En källa per rad", height=160,
+                                placeholder="SVT Nyheter | https://www.svt.se/nyheter/rss.xml\n"
+                                            "Upphandling24 | https://upphandling24.se/feed/")
+            filtrera_alla = st.toggle("Filtrera med nyckelord", value=True, key=k("flera_filtrera"))
+            if st.form_submit_button("Lägg till alla", type="primary"):
+                nya = [x for x in las_kallor_fran_text(text) if not any(y["url"] == x["url"] for y in b["kallor"])]
+                if not nya:
+                    st.error("Hittade inga nya länkar. Skriv en källa per rad med en länk som börjar med https://")
+                else:
+                    b["kallor"] += [{**x, "filtrera": filtrera_alla, "_id": nytt_id()} for x in nya]
+                    ss[f"meddelande_{pid}"] = f"{antal(len(nya), 'källa', 'källor')} tillagda."
+                    st.rerun()
+
+    with st.expander("Hittar du ingen RSS-länk? Ta hjälp av AI"):
+        st.markdown("Snabbast är ofta att fråga **Stacken** eller en annan AI-tjänst. Kopiera frågan nedan med "
+                    "knappen uppe till höger i rutan, byt ut texten inom hakparentes mot det du vill bevaka och "
+                    "klistra in svaret under **Klistra in flera källor på en gång** här ovanför.")
+        st.code(PROMPT_KALLOR, language=None, wrap_lines=True)
+        st.caption("AI kan ibland hitta på länkar som inte finns. Kör bevakningen en gång, så ser du vilka som "
+                   "fungerar och kan ta bort resten med en knapp. Du kan också själv söka på sajtens namn och RSS, "
+                   "eller prova att lägga till /rss eller /feed efter adressen.")
     st.button("Nästa: Nyckelord →", key=k("till_ord"), on_click=byt_flik, args=(pid, FLIKAR[1]))
 
 
-def flik_nyckelord(pid, b, start, k):
-    st.write("Skriv ett ord och tryck **Enter**. Lägg till en stjärna, som `ränt*`, för att få med räntan, räntor och räntehöjning.")
+def flik_nyckelord(pid, e, b, start, k):
+    st.write("Skriv ett ord och tryck **Enter**. Lägg till en stjärna, som `ränt*`, för att få med räntan, räntor "
+             "och räntehöjning. Du kan också klistra in många ord på en gång, separerade med kommatecken.")
 
     def ordfalt(falt, etikett, platshallare, help=None):
-        b[falt] = rensa_ord(st.multiselect(
-            etikett, options=start[falt], default=start[falt], key=k(falt),
-            accept_new_options=True, placeholder=platshallare, help=help))
+        valda = st.multiselect(etikett, options=start[falt], default=start[falt], key=k(falt),
+                               accept_new_options=True, placeholder=platshallare, help=help)
+        b[falt] = rensa_ord(valda)
+        if any(re.search(r"[,;\n]", str(x)) for x in valda):
+            # En inklistrad lista delas upp i separata ord
+            e["start"] = copy.deepcopy(b)
+            e["version"] += 1
+            byt_flik(pid, FLIKAR[1])
+            st.rerun()
 
     ordfalt("nyckelord", "Nyckelord som räcker ensamma för en träff", "Skriv ett nyckelord och tryck Enter")
+    with st.expander("Vet du inte vilka nyckelord du ska välja? Ta hjälp av AI"):
+        st.markdown("Fråga **Stacken** eller en annan AI-tjänst. Kopiera frågan nedan, byt ut texten inom "
+                    "hakparentes, och klistra sedan in hela svaret i nyckelordsfältet ovanför och tryck **Enter**. "
+                    "Orden delas upp automatiskt.")
+        st.code(PROMPT_ORD, language=None, wrap_lines=True)
+        st.caption("Rensa gärna bort ord som är för breda. Ett ord som \"system\" eller \"avtal\" ger många "
+                   "träffar som inte handlar om ditt ämne.")
     with st.expander("Avancerat: tvetydiga ord och kategorier"):
         ordfalt("tvetydiga_ord", "Tvetydiga ord", "T.ex. hammarby",
                 "Ger bara träff om ett kontextord också finns. Bra för namn som kan betyda flera saker.")
@@ -440,8 +490,9 @@ def flik_resultat(e, b, namn_fil):
 # =================== Sidomeny ===================
 def sidomeny():
     with st.sidebar:
-        st.markdown("<div class='logo'><span></span>Omvärldsbevakning</div>", unsafe_allow_html=True)
-        st.button("Startsida", key="nav_start", width="stretch",
+        st.markdown("<div class='logo'><span></span><div>Adda<small>Omvärldsbevakning</small></div></div>",
+                    unsafe_allow_html=True)
+        st.button("Startsida och mallar", key="nav_start", width="stretch",
                   type="primary" if ss.aktiv is None else "secondary", on_click=ga_till, args=(None,))
         if ss.oppna:
             st.caption("Mina bevakningar")
@@ -449,12 +500,12 @@ def sidomeny():
                 namn = re.sub(r"([\\`*_\[\]<>#~:|])", r"\\\1", e["bev"]["namn"] or "Namnlös")
                 st.button(f":{e['punkt']}[●]  {namn}", key=f"nav_{pid}", width="stretch",
                           type="primary" if pid == ss.aktiv else "secondary", on_click=ga_till, args=(pid,))
-        st.button("+ Ny bevakning", key="nav_ny", type="tertiary", on_click=ga_till, args=(None,))
         st.divider()
         with st.expander("Öppna sparad bevakning"):
             hantera_fil(st.file_uploader("Välj fil", type="json", key="fil_meny", label_visibility="collapsed"))
         st.caption("Appen minns inte dina bevakningar när du stänger fliken. "
                    "Spara dem som fil under Namn, spara och stäng.")
+        st.caption("Ett verktyg för medarbetare på Adda.")
 
 
 if ss.aktiv not in ss.oppna:

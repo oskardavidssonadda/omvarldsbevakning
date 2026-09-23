@@ -61,12 +61,27 @@ def normalisera(o):
 
 
 def rensa_ord(lista):
+    """Städar en ordlista. Delar också upp inklistrade listor med komma, semikolon eller radbrytning."""
     ut = []
-    for o in lista:
-        o = str(o).strip().lower()
-        if o and o not in ut:
-            ut.append(o)
+    for rad in lista:
+        for o in re.split(r"[,;\n]", str(rad)):
+            o = re.sub(r"^(?:[•\-*]\s+|\d+[.)]\s+)", "", o.strip()).strip(" \"'").lower()
+            if o and o not in ut:
+                ut.append(o)
     return ut
+
+
+def las_kallor_fran_text(text):
+    """Hittar källor i inklistrad text, t.ex. från en AI. En källa per rad: Namn | https://..."""
+    kallor = []
+    for rad in text.splitlines():
+        m = re.search(r"https?://[^\s|<>\"')\]]+", rad)
+        if not m:
+            continue
+        namn = re.sub(r"^(?:[•\-*]\s*|\d+[.)]\s*)", "", rad[:m.start()]).strip(" |:–-\t*[]()")
+        url = m.group(0).rstrip(".,;")
+        kallor.append({"namn": namn or vard(url), "url": url})
+    return kallor
 
 
 # ---------- Matchning ----------
