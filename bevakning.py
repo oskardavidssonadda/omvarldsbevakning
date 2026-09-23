@@ -84,7 +84,7 @@ def bygg_matchare(b):
     tvet = [(o, ord_monster(o)) for o in b["tvetydiga_ord"]]
     nyck_re = [(o, m, re.compile(m, re.I)) for o, m in nyck]
     tvet_re = [(o, m, re.compile(m, re.I)) for o, m in tvet]
-    kont = [k.rstrip("*") for k in b["kontextord"] if k.rstrip("*")]
+    kont = [(k, ord_monster(k), re.compile(ord_monster(k), re.I)) for k in b["kontextord"] if k.rstrip("*")]
     kat = [k.rstrip("*") for k in b["kategoriord"] if k.rstrip("*")]
 
     def matcha(titel, sammanfattning, kategorier):
@@ -98,9 +98,9 @@ def bygg_matchare(b):
                 return o, [m]
         for o, m, r in tvet_re:
             if r.search(text):
-                for k in kont:
-                    if k in text:
-                        return f"{o} + {k}", [m, re.escape(k)]
+                for k, km, kr in kont:
+                    if kr.search(text):
+                        return f"{o} + {k}", [m, km]
         return None, None
 
     return matcha

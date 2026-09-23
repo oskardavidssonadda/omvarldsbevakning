@@ -9,7 +9,7 @@ import streamlit as st
 
 from bevakning import (antal, hamta_nyheter, markera, normalisera, rensa_ord,
                        skapa_excel, skapa_word, tom_bevakning, vard)
-from mallar import MALLAR
+from mallar import GRUPPER, MALLAR
 
 st.set_page_config(page_title="Omvärldsbevakning", page_icon="📰", layout="wide",
                    initial_sidebar_state="expanded")
@@ -17,6 +17,10 @@ st.set_page_config(page_title="Omvärldsbevakning", page_icon="📰", layout="wi
 EGEN = {"farg": "#0E9AA7", "etikett": "Egen", "punkt": "blue"}
 FRAN_FIL = {"farg": "#64748B", "etikett": "Från fil", "punkt": "gray"}
 FLIKAR = ["1. Källor", "2. Nyckelord", "3. Resultat"]
+
+
+def slug(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower().translate(str.maketrans("åäöé", "aaoe")))
 
 CSS = """
 .block-container {padding-top: 1.6rem; padding-bottom: 4rem; max-width: 1200px;}
@@ -41,9 +45,11 @@ header[data-testid="stHeader"] {background: transparent;}
   box-shadow: 0 1px 2px rgba(29,27,58,.05), 0 8px 24px rgba(29,27,58,.06); transition: transform .15s, box-shadow .15s;}
 [class*="st-key-kort_"]:hover {transform: translateY(-3px); box-shadow: 0 2px 4px rgba(29,27,58,.06), 0 14px 32px rgba(29,27,58,.10);}
 [class*="st-key-kort_"] > div:last-child {margin-top: auto;}
+[data-testid="stLayoutWrapper"]:has(> [class*="st-key-kort_"]) {flex: 1 1 auto;}
+[class*="st-key-kort_"] {flex: 1 1 auto;}
 [class*="st-key-fortsatt_"] {min-height: 0;}
 .etikett {display: inline-block; font-size: .75rem; font-weight: 700; padding: .18rem .6rem; border-radius: 999px;}
-.kort-titel {font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 1.45rem; margin: .55rem 0 .2rem;}
+.kort-titel {font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; font-size: 1.45rem; line-height: 1.15; margin: .6rem 0 .45rem;}
 .kort-text {opacity: .8; margin: 0 0 .5rem; line-height: 1.45;}
 .kort-meta {font-size: .85rem; opacity: .6; margin: 0;}
 
@@ -95,7 +101,7 @@ mark {background: #FFE58F; color: #1D1B3A; padding: 0 .15em; border-radius: 3px;
 @media (prefers-reduced-motion: reduce) {[class*="st-key-kort_"], .artikel {transition: none;}
   [class*="st-key-kort_"]:hover {transform: none;}}
 """
-kortfarger = "".join(f".st-key-kort_{re.sub(r'[^a-z]', '', m['titel'].lower())} {{border-top-color: {m['farg']} !important;}}"
+kortfarger = "".join(f".st-key-kort_{slug(m['titel'])} {{border-top-color: {m['farg']} !important;}}"
                      for m in MALLAR) + f".st-key-kort_egen {{border-top-color: {EGEN['farg']} !important;}}"
 st.markdown(f"<style>{CSS}{kortfarger}</style>", unsafe_allow_html=True)
 
@@ -140,6 +146,11 @@ def satt_filter(pid, kid):
     for k in ss.oppna[pid]["bev"]["kallor"]:
         if k["_id"] == kid:
             k["filtrera"] = ss[f"{pid}_filt_{kid}"]
+
+
+def ta_bort_trasiga(pid, namn):
+    b = ss.oppna[pid]["bev"]
+    b["kallor"] = [k for k in b["kallor"] if k["namn"] not in namn]
 
 
 def ta_bort_kalla(pid, kid):
@@ -196,24 +207,31 @@ def startsida():
                 c.button("Fortsätt", key=f"fortsatt_{pid}", width="stretch", on_click=ga_till, args=(pid,))
         st.markdown("<div class='sektion'>Eller börja på en ny</div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='sektion'>Välj en mall</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='sektion'>Välj bland {len(MALLAR)} mallar</div>", unsafe_allow_html=True)
 
-    kol = st.columns(len(MALLAR) + 1, gap="medium")
-    for k, m in zip(kol, MALLAR):
-        redan = next((pid for pid, e in ss.oppna.items() if e["mall"] == m["titel"]), None)
-        with k:
-            c = kort(re.sub(r"[^a-z]", "", m["titel"].lower()), m["farg"], m["etikett"], m["titel"], m["text"],
-                     sammanfattning(m["bevakning"]))
-            if redan:
-                c.button("Redan öppen, gå dit", key=f"mall_{m['titel']}", width="stretch", on_click=ga_till, args=(redan,))
-            else:
-                c.button("Använd mallen", key=f"mall_{m['titel']}", width="stretch", type="primary",
-                         on_click=oppna_mall, args=(m,))
-    with kol[-1]:
-        c = kort("egen", EGEN["farg"], "Egen", "Från grunden", "Helt blank. Lägg in dina egna källor och nyckelord.",
-                 "Tom bevakning")
-        c.button("Skapa egen", key="mall_egen", width="stretch", type="primary",
-                 on_click=oppna_ny, args=(tom_bevakning("Min bevakning"), EGEN))
+    grupp = st.pills("Visa mallar för", ["Alla"] + GRUPPER, default="Alla", key="grupp_filter",
+                     label_visibility="collapsed") or "Alla"
+    synliga = [m for m in MALLAR if grupp == "Alla" or m["grupp"] == grupp]
+    kort_lista = [("mall", m) for m in synliga] + [("egen", None)]
+    for rad in range(0, len(kort_lista), 4):
+        kol = st.columns(4, gap="medium")
+        for k, (typ, m) in zip(kol, kort_lista[rad:rad + 4]):
+            with k:
+                if typ == "egen":
+                    c = kort("egen", EGEN["farg"], "Egen", "Från grunden",
+                             "Helt blank. Lägg in dina egna källor och nyckelord.", "Tom bevakning")
+                    c.button("Skapa egen", key="mall_egen", width="stretch", type="primary",
+                             on_click=oppna_ny, args=(tom_bevakning("Min bevakning"), EGEN))
+                    continue
+                redan = next((pid for pid, e in ss.oppna.items() if e["mall"] == m["titel"]), None)
+                c = kort(slug(m["titel"]), m["farg"], m["etikett"], m["titel"], m["text"],
+                         sammanfattning(m["bevakning"]))
+                if redan:
+                    c.button("Redan öppen, gå dit", key=f"mall_{slug(m['titel'])}", width="stretch",
+                             on_click=ga_till, args=(redan,))
+                else:
+                    c.button("Använd mallen", key=f"mall_{slug(m['titel'])}", width="stretch", type="primary",
+                             on_click=oppna_mall, args=(m,))
 
     st.write("")
     with st.expander("Har du sparat en bevakning tidigare? Öppna den här"):
@@ -282,6 +300,12 @@ def flik_kallor(pid, e, b, k):
     if e["resultat"] is not None:
         status = {r["Källa"]: r for r in e["resultat"][1].to_dict("records")}
 
+    trasiga = [n for n, r in status.items() if r["Status"] != "OK" and any(x["namn"] == n for x in b["kallor"])]
+    if trasiga:
+        a, c = st.columns([3, 1.4], vertical_alignment="center")
+        a.warning(f"{antal(len(trasiga), 'källa', 'källor')} gick inte att läsa senast. De är markerade i rött nedan.")
+        c.button(f"Ta bort {'den' if len(trasiga) == 1 else 'dem'}", key=k("bort_trasiga"), width="stretch",
+                 on_click=ta_bort_trasiga, args=(pid, trasiga))
     if not b["kallor"]:
         st.info("Inga källor än. Lägg till din första här nedanför.")
     for kalla in b["kallor"]:
@@ -331,7 +355,8 @@ def flik_nyckelord(pid, b, start, k):
     with st.expander("Avancerat: tvetydiga ord och kategorier"):
         ordfalt("tvetydiga_ord", "Tvetydiga ord", "T.ex. hammarby",
                 "Ger bara träff om ett kontextord också finns. Bra för namn som kan betyda flera saker.")
-        ordfalt("kontextord", "Kontextord", "T.ex. tränare", "Bekräftar att ett tvetydigt ord handlar om rätt sak.")
+        ordfalt("kontextord", "Kontextord", "T.ex. tränar*",
+                "Bekräftar att ett tvetydigt ord handlar om rätt sak. Stjärna fungerar här också.")
         ordfalt("kategoriord", "Kategoriord", "T.ex. fotboll",
                 "Matchas mot kategorierna som källan själv sätter på sina artiklar.")
     a, _, c = st.columns([1.3, 2, 1.6])
