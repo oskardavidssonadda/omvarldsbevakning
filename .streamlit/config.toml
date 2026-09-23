@@ -1,0 +1,20 @@
+[theme]
+base = "light"
+primaryColor = "#5B3DF5"
+backgroundColor = "#F7F6FC"
+secondaryBackgroundColor = "#EDEAFB"
+textColor = "#1D1B3A"
+linkColor = "#5B3DF5"
+borderColor = "#E2DEF3"
+baseRadius = "large"
+buttonRadius = "full"
+font = "Figtree:https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Bricolage Grotesque:https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&display=swap, sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+
+[theme.sidebar]
+backgroundColor = "#1D1B3A"
+secondaryBackgroundColor = "#2C2956"
+textColor = "#ECEAFF"
+primaryColor = "#8F7BFF"
+borderColor = "#3A366E"
