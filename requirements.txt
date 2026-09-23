@@ -1,5 +1,6 @@
-streamlit
+streamlit>=1.50
 feedparser
 pandas
 openpyxl
 python-docx
+requests
